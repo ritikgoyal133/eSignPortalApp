@@ -1,0 +1,17 @@
+# Ignore node_modules in both client and server
+/node_modules
+/client/node_modules
+/server/node_modules
+
+# Ignore build folders in client and server
+/client/build
+/server/build
+
+# Ignore environment files (if you have .env files in both client and server)
+*.env
+
+# Ignore logs
+*.log
+
+# Ignore temporary files
+*.tmp
