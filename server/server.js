@@ -48,15 +48,13 @@ connectDB();
 // Routes
 app.use("/api", documentRoutes);
 
-// Handle undefined routes
-app.all("*", (req, res) => {
-  res.status(404).json({ message: "Route not found" });
-});
-
-// For production
+// For production - serve React app
 if (process.env.NODE_ENV === "production") {
+  // Serve static files from React build
   app.use(express.static(path.join(__dirname, "client", "build")));
 
+  // Serve React app for all non-API routes (SPA routing)
+  // This must come AFTER static files but handles all routes
   app.get("*", (req, res) => {
     res.sendFile(path.resolve(__dirname, "client", "build", "index.html"));
   });
@@ -64,6 +62,11 @@ if (process.env.NODE_ENV === "production") {
   // For development
   app.get("/", (req, res) => {
     res.send("API is running...");
+  });
+  
+  // Handle undefined API routes in development only
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ message: "Route not found" });
   });
 }
 
@@ -74,7 +77,7 @@ app.use((err, req, res, next) => {
 });
 
 // Define and start the server
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
