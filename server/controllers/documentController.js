@@ -21,11 +21,11 @@ const uploadsDir = path.join(__dirname, "../uploads");
 // Set up multer for handling file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = "./uploads/";
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir); // Create the upload folder if it doesn't exist
+    // Use absolute path for uploads directory
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true }); // Create the upload folder if it doesn't exist
     }
-    cb(null, uploadDir);
+    cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     const uniqueName = uuidv4() + path.extname(file.originalname); // Unique filename
@@ -66,6 +66,11 @@ export const uploadDocument = async (req, res) => {
       return res.status(500).json({ message: err.message });
     }
     try {
+      // Check if file was uploaded
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
       const documentFile = req.file;
       const fileExtension = path
         .extname(documentFile.originalname)
@@ -76,17 +81,29 @@ export const uploadDocument = async (req, res) => {
 
       // If the uploaded file is a DOCX, convert it to PDF
       if (fileExtension === ".docx") {
-        const docxPath = path.resolve("uploads", documentFile.filename);
+        // Use absolute path for DOCX file
+        const docxPath = path.join(uploadsDir, documentFile.filename);
         console.log("Docx Path:", docxPath);
 
-        // Define the output PDF path
-        pdfPath = path.resolve(
-          "uploads",
+        // Define the output PDF path using absolute path
+        pdfPath = path.join(
+          uploadsDir,
           documentFile.filename.replace(".docx", ".pdf")
         );
 
         // Convert DOCX to PDF
-        await convertDocxToPdf(docxPath, pdfPath);
+        try {
+          await convertDocxToPdf(docxPath, pdfPath);
+        } catch (conversionError) {
+          console.error("DOCX conversion error:", conversionError);
+          // Clean up uploaded DOCX file
+          if (fs.existsSync(docxPath)) {
+            fs.unlinkSync(docxPath);
+          }
+          return res.status(500).json({ 
+            message: "Failed to convert DOCX to PDF. Please upload a PDF file instead." 
+          });
+        }
 
         // After conversion, update the document path to the PDF
         documentPath = `/uploads/${path.basename(pdfPath)}`;
@@ -105,7 +122,20 @@ export const uploadDocument = async (req, res) => {
       });
     } catch (error) {
       console.error("Error uploading document:", error);
-      res.status(500).json({ message: "Server error" });
+      // Clean up uploaded file if it exists
+      if (req.file && req.file.path) {
+        try {
+          if (fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+          }
+        } catch (cleanupError) {
+          console.error("Error cleaning up file:", cleanupError);
+        }
+      }
+      res.status(500).json({ 
+        message: "Server error", 
+        error: process.env.NODE_ENV === "development" ? error.message : undefined 
+      });
     }
   });
 };
